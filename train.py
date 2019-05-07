@@ -37,7 +37,7 @@ def train(train_iter, dev_iter, model, args):
                 accuracy = 100.0 * corrects/batch.batch_size
                 sys.stdout.write(
                     '\rBatch[{}] - loss: {:.6f}  acc: {:.4f}%({}/{})'.format(steps, 
-                                                                             loss.data[0], 
+                                                                             loss.data.item(),
                                                                              accuracy,
                                                                              corrects,
                                                                              batch.batch_size))
@@ -67,7 +67,7 @@ def eval(data_iter, model, args):
         logit = model(feature)
         loss = F.cross_entropy(logit, target, size_average=False)
 
-        avg_loss += loss.data[0]
+        avg_loss += loss.data.item()
         corrects += (torch.max(logit, 1)
                      [1].view(target.size()).data == target.data).sum()
 
@@ -95,7 +95,7 @@ def predict(text, model, text_field, label_feild, cuda_flag):
     output = model(x)
     _, predicted = torch.max(output, 1)
     #return label_feild.vocab.itos[predicted.data[0][0]+1]
-    return label_feild.vocab.itos[predicted.data[0]+1]
+    return label_feild.vocab.itos[predicted.data.item()+1]
 
 
 def save(model, save_dir, save_prefix, steps):

@@ -20,11 +20,10 @@ class CNN_Text(nn.Module):
         self.embed = nn.Embedding(V, D)
         # self.convs1 = [nn.Conv2d(Ci, Co, (K, D)) for K in Ks]
         self.convs1 = nn.ModuleList([nn.Conv2d(Ci, Co, (K, D)) for K in Ks])
-        '''
-        self.conv13 = nn.Conv2d(Ci, Co, (3, D))
-        self.conv14 = nn.Conv2d(Ci, Co, (4, D))
-        self.conv15 = nn.Conv2d(Ci, Co, (5, D))
-        '''
+
+        self.highway_layers = nn.ModuleList([HighwayMLP(len(Ks)*Co, activation_function=F.relu)
+                                             for K in Ks])
+
         self.dropout = nn.Dropout(args.dropout)
         self.fc1 = nn.Linear(len(Ks)*Co, C)
 
@@ -47,12 +46,43 @@ class CNN_Text(nn.Module):
 
         x = torch.cat(x, 1)
 
-        '''
-        x1 = self.conv_and_pool(x,self.conv13) #(N,Co)
-        x2 = self.conv_and_pool(x,self.conv14) #(N,Co)
-        x3 = self.conv_and_pool(x,self.conv15) #(N,Co)
-        x = torch.cat((x1, x2, x3), 1) # (N,len(Ks)*Co)
-        '''
+        for current_layer in self.highway_layers:
+            x = current_layer(x)
+
         x = self.dropout(x)  # (N, len(Ks)*Co)
         logit = self.fc1(x)  # (N, C)
         return logit
+
+
+import torch
+import torch.nn as nn
+
+
+class HighwayMLP(nn.Module):
+
+    def __init__(self,
+                 input_size,
+                 gate_bias=-2,
+                 activation_function=nn.functional.relu,
+                 gate_activation=nn.functional.softmax):
+
+        super(HighwayMLP, self).__init__()
+
+        self.activation_function = activation_function
+        self.gate_activation = gate_activation
+
+        self.normal_layer = nn.Linear(input_size, input_size)
+
+        self.gate_layer = nn.Linear(input_size, input_size)
+        self.gate_layer.bias.data.fill_(gate_bias)
+
+    def forward(self, x):
+
+        normal_layer_result = self.activation_function(self.normal_layer(x))
+        gate_layer_result = self.gate_activation(self.gate_layer(x))
+
+        multiplyed_gate_and_normal = torch.mul(normal_layer_result, gate_layer_result)
+        multiplyed_gate_and_input = torch.mul((1 - gate_layer_result), x)
+
+        return torch.add(multiplyed_gate_and_normal,
+                         multiplyed_gate_and_input)
